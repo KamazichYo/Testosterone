@@ -262,7 +262,7 @@ export class UIScene extends Phaser.Scene {
     this.cardHomeY = this.topY + px(44);
     this.card = this.add.container(s.left + px(8), this.cardHomeY).setAlpha(0).setVisible(false);
     this.card.add(panel(this, 0, 0, cw, ch));
-    this.cardPortrait = this.add.sprite(px(40), ch / 2 + px(2), '__DEFAULT');
+    this.cardPortrait = this.add.sprite(px(40), ch / 2 + px(4), "__DEFAULT");
     this.cardName = text(this, px(80), px(9), '', 16);
     this.cardSub = text(this, px(80), px(29), '', 12, { color: '#7a4a28' });
     this.cardBars = this.add.graphics();
@@ -338,9 +338,9 @@ export class UIScene extends Phaser.Scene {
     const key = dogTexture(this, dog);
     if (key !== this.cardDogKey) {
       this.cardDogKey = key;
-      const ps = Math.max(2, Math.round(px(60) / 32));
+      const ps = Math.max(2, Math.round(px(80) / 40));
       this.cardPortrait.setTexture(key, 0).setScale(ps);
-      this.cardPortrait.anims.play(`${key}_idle`);
+      this.cardPortrait.anims.play(`${key}_idle_down`);
     }
     const leader = dog.isLeader ? ' · вожак' : '';
     this.cardName.setText(`${dog.name}${leader}`);

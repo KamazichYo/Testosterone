@@ -1,3 +1,4 @@
+import { DOG_ORIGIN_Y } from '../art/dogArt';
 import Phaser from 'phaser';
 import { drawProp, propKey } from '../art/propFactory';
 import { drawShadow } from '../art/props';
@@ -560,7 +561,7 @@ export class ShelterScene extends WorldScene {
     const dog = gameState.data.dogs[dogId];
     const p = this.puppets.get(dogId);
     if (p) {
-      const ghost = this.add.sprite(p.x, p.y, p.view.texture.key, p.view.frame.name).setOrigin(0.5, 22 / 24).setDepth(p.y).setFlipX(p.facingLeft);
+      const ghost = this.add.sprite(p.x, p.y, p.view.texture.key, p.view.frame.name).setOrigin(0.5, DOG_ORIGIN_Y).setDepth(p.y).setFlipX(p.facingLeft);
       this.tweens.add({ targets: ghost, x: this.player.x, y: this.player.y - 20, scale: 0.3, duration: 260, ease: 'Cubic.In', onComplete: () => ghost.destroy() });
       p.destroy();
       this.puppets.delete(dogId);

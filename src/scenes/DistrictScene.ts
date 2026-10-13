@@ -1,3 +1,4 @@
+import { DOG_ORIGIN_Y } from '../art/dogArt';
 import Phaser from 'phaser';
 import { play, vibrate } from '../core/sfx';
 import { gameState } from '../core/state';
@@ -344,6 +345,7 @@ export class DistrictScene extends WorldScene {
         break;
       case 'pet':
         if (this.ctxTarget) {
+          this.player.crouch(500);
           this.ctxTarget.pet();
           this.burst(this.ctxTarget.x, this.ctxTarget.y - 14, 'icon_heart', 3);
         }
@@ -400,7 +402,7 @@ export class DistrictScene extends WorldScene {
     } else p.facing = dog.y < p.y ? 'up' : 'down';
     const { x: lx, y: ly } = this.landingSpot(dog);
     const sx = p.x;
-    const sy = p.y - 14;
+    const sy = p.y - 18;
     const kib = this.add.image(sx, sy, 'fx_kibble').setDepth(100000);
     const shadow = this.add.image(sx, p.y, 'shadow_s').setScale(0.4).setDepth(p.y);
     play('throw');
@@ -488,7 +490,7 @@ export class DistrictScene extends WorldScene {
       this.burst(dog.x, dog.y - 10, 'icon_heart', 6);
       const ghost = this.add
         .sprite(dog.x, dog.y, dog.view.texture.key, dog.view.frame.name)
-        .setOrigin(0.5, 22 / 24)
+        .setOrigin(0.5, DOG_ORIGIN_Y)
         .setDepth(dog.y)
         .setFlipX(dog.facingLeft);
       dog.destroy();

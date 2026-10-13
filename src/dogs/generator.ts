@@ -59,9 +59,12 @@ export function generateLook(rng: Rng, size?: DogSize): DogLook {
     patch: coat.patch,
     pattern: rng.pick(coat.patterns),
     ears: weighted(rng, { up: 4, floppy: 4, half: 3 }),
-    tail: weighted(rng, { curl: 4, straight: 3, fluffy: 3 }),
+    tail: weighted(rng, { curl: 4, straight: 3, fluffy: 3, low: 2 }),
     eye: rng.pick(EYES),
     seed: rng.int(0, 1e9),
+    build: weighted(rng, { stocky: 3, normal: 5, lanky: 2 }),
+    coat: weighted(rng, { short: 6, long: 3 }),
+    head: weighted(rng, { pointy: 3, normal: 5, short: 2 }),
   };
 }
 

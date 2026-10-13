@@ -109,6 +109,19 @@ export class PixelCanvas {
     }
   }
 
+  /** Ellipse where the callback may return null to leave a pixel untouched. */
+  ellipseMask(cx: number, cy: number, rx: number, ry: number, c: (nx: number, ny: number) => Color | null): void {
+    for (let y = Math.floor(cy - ry - 1); y <= Math.ceil(cy + ry + 1); y++) {
+      for (let x = Math.floor(cx - rx - 1); x <= Math.ceil(cx + rx + 1); x++) {
+        const nx = (x + 0.5 - cx) / rx;
+        const ny = (y + 0.5 - cy) / ry;
+        if (nx * nx + ny * ny > 1) continue;
+        const col = c(nx, ny);
+        if (col !== null) this.set(x, y, col);
+      }
+    }
+  }
+
   /**
    * Ellipse with built-in three-tone shading: light from the top-left, shadow bottom-right.
    * This is the workhorse for round, soft cartoon shapes (canopies, bodies, heads).
@@ -122,6 +135,53 @@ export class PixelCanvas {
       if (d < -0.55 && nx * nx + ny * ny > 0.12) return light;
       return base;
     });
+  }
+
+  /**
+   * Thick line with round caps (a limb). The colour callback gets u = 0..1 along the segment
+   * and v = -1..1 across it, so limbs can be shaded on one side.
+   */
+  capsule(x0: number, y0: number, x1: number, y1: number, r: number, c: Color | ((u: number, v: number) => Color)): void {
+    const minX = Math.floor(Math.min(x0, x1) - r - 1);
+    const maxX = Math.ceil(Math.max(x0, x1) + r + 1);
+    const minY = Math.floor(Math.min(y0, y1) - r - 1);
+    const maxY = Math.ceil(Math.max(y0, y1) + r + 1);
+    const dx = x1 - x0;
+    const dy = y1 - y0;
+    const len2 = dx * dx + dy * dy || 1e-6;
+    const len = Math.sqrt(len2);
+    for (let y = minY; y <= maxY; y++) {
+      for (let x = minX; x <= maxX; x++) {
+        const px = x + 0.5 - x0;
+        const py = y + 0.5 - y0;
+        const u = Math.max(0, Math.min(1, (px * dx + py * dy) / len2));
+        const cx = px - u * dx;
+        const cy = py - u * dy;
+        if (cx * cx + cy * cy > r * r) continue;
+        // signed distance across (positive = right of travel direction)
+        const v = (px * dy - py * dx) / len / r;
+        this.set(x, y, typeof c === 'function' ? c(u, Math.max(-1, Math.min(1, v))) : c);
+      }
+    }
+  }
+
+  /** Filled polygon (even-odd), sampled at pixel centres. */
+  poly(pts: [number, number][], c: Color | ((x: number, y: number) => Color)): void {
+    const xs = pts.map((p) => p[0]);
+    const ys = pts.map((p) => p[1]);
+    for (let y = Math.floor(Math.min(...ys)); y <= Math.ceil(Math.max(...ys)); y++) {
+      for (let x = Math.floor(Math.min(...xs)); x <= Math.ceil(Math.max(...xs)); x++) {
+        const px = x + 0.5;
+        const py = y + 0.5;
+        let inside = false;
+        for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+          const [xi, yi] = pts[i];
+          const [xj, yj] = pts[j];
+          if (yi > py !== yj > py && px < ((xj - xi) * (py - yi)) / (yj - yi) + xi) inside = !inside;
+        }
+        if (inside) this.set(x, y, typeof c === 'function' ? c(x, y) : c);
+      }
+    }
   }
 
   roundRect(x: number, y: number, w: number, h: number, r: number, c: Color): void {

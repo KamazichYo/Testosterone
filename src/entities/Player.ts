@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import type { DogData } from '../dogs/types';
+import { HUMAN_ORIGIN_Y } from '../art/humanArt';
 import { Actor } from './Actor';
 
 export type Facing = 'down' | 'up' | 'side';
@@ -12,13 +13,14 @@ export class Player extends Actor {
   carrying: DogData | null = null;
   private stunnedUntil = 0;
   private throwingUntil = 0;
+  private crouchUntil = 0;
   private readonly carrier: Phaser.GameObjects.Image;
   private stepDist = 0;
   /** called every few steps while walking (dust puffs, splashes) */
   onStep: ((x: number, y: number) => void) | null = null;
 
   constructor(scene: Phaser.Scene, x: number, y: number) {
-    super(scene, x, y, 10, 5, 'player', 23 / 24, 'shadow_s');
+    super(scene, x, y, 10, 5, 'player', HUMAN_ORIGIN_Y, 'shadow_s');
     this.carrier = scene.add.image(x, y, 'carrier').setOrigin(0.5, 1).setVisible(false);
   }
 
@@ -32,6 +34,11 @@ export class Player extends Actor {
     this.body.velocity.set(Math.cos(a) * 130, Math.sin(a) * 130);
     this.boing(0.25, 300);
     this.scene.tweens.add({ targets: this.view, alpha: 0.5, yoyo: true, repeat: 2, duration: 100, onComplete: () => this.view.setAlpha(1) });
+  }
+
+  /** Crouch for a moment (picking up, petting). */
+  crouch(ms = 320): void {
+    this.crouchUntil = this.scene.time.now + ms;
   }
 
   /** Arm-throw pose for a moment. */
@@ -69,7 +76,8 @@ export class Player extends Actor {
     const moving = sp > 8;
     const dir = this.facing;
     let name: string;
-    if (this.scene.time.now < this.throwingUntil) name = 'throw';
+    if (this.scene.time.now < this.crouchUntil && !moving) name = 'crouch';
+    else if (this.scene.time.now < this.throwingUntil) name = 'throw';
     else if (this.carrying) name = moving ? 'carryWalk' : 'carryIdle';
     else name = moving ? 'walk' : 'idle';
     const key = `player_${dir}_${name}`;
@@ -87,6 +95,7 @@ export class Player extends Actor {
   }
 
   pickUp(dog: DogData): void {
+    this.crouch(280);
     this.carrying = dog;
     this.carrier.setVisible(true).setScale(0.2);
     this.scene.tweens.add({ targets: this.carrier, scale: 1, duration: 280, ease: 'Back.Out' });
@@ -105,7 +114,7 @@ export class Player extends Actor {
     super.syncView();
     const frame = Number(this.view.frame.name);
     const walkBob = this.carrying && this.speed > 8 && frame % 2 === 1 ? 1 : 0;
-    this.carrier.setPosition(this.x, this.y - 25 - this.hop + walkBob).setDepth(this.y + 0.5);
+    this.carrier.setPosition(this.x, this.y - 30 - this.hop + walkBob).setDepth(this.y + 0.5);
   }
 
   destroy(): void {

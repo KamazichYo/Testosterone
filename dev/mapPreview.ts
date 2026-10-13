@@ -18,12 +18,12 @@ export function composeMap(): PixelCanvas {
   const van = drawVan();
   items.push({ y: d.van.y, draw: () => pc.blit(van, d.van.x - 28, d.van.y - 36) });
   const player = drawPlayerSheet();
-  const pf = new PixelCanvas(16, 24);
+  const pf = new PixelCanvas(20, 30);
   pf.blit(player, 0, 0);
-  items.push({ y: d.playerStart.y, draw: () => pc.blit(pf, d.playerStart.x - 8, d.playerStart.y - 24) });
+  items.push({ y: d.playerStart.y, draw: () => pc.blit(pf, d.playerStart.x - 10, d.playerStart.y - 29) });
   for (const dog of generateDistrictDogs(d.dogs!, 1)) {
     const f = drawDogFrame(dog.look, 0, { dirt: 0.8, angry: dog.stats.aggression > 55, hungry: true, tagged: false });
-    items.push({ y: dog.home.y, draw: () => pc.blit(f, dog.home.x - 16, dog.home.y - 22) });
+    items.push({ y: dog.home.y, draw: () => pc.blit(f, dog.home.x - 20, dog.home.y - 31) });
   }
   items.sort((a, b) => a.y - b.y).forEach((i) => i.draw());
   return pc;

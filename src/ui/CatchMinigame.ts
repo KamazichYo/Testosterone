@@ -61,9 +61,9 @@ export class CatchMinigame {
     this.root.add(this.rings);
 
     const key = dogTexture(scene, dog);
-    const ps = Math.max(2, Math.round((this.r0 * 1.2) / 32));
+    const ps = Math.max(2, Math.round((this.r0 * 1.3) / 40));
     this.portrait = scene.add.sprite(this.cx, this.cy + px(6), key, 0).setScale(ps);
-    this.portrait.anims.play(`${key}_idle`);
+    this.portrait.anims.play(`${key}_idle_down`);
     this.root.add(this.portrait);
 
     const pawScale = Math.max(2, Math.round(metrics.art * 0.9));
@@ -109,7 +109,7 @@ export class CatchMinigame {
       if (this.round >= this.req.difficulty.rounds) {
         this.done = true;
         this.status.setText(`${this.req.dog.name} ${g(this.req.dog, 'попался', 'попалась')}!`);
-        this.portrait.anims.play(`${this.portrait.texture.key}_happy`);
+        this.portrait.anims.play(`${this.portrait.texture.key}_sit_down`);
         this.draw();
         this.finish(true, 650);
       } else {
@@ -127,7 +127,7 @@ export class CatchMinigame {
     this.flash = 400;
     this.flashColor = 0xff6b6b;
     this.status.setText(`${msg} ${this.req.dog.name} ${g(this.req.dog, 'вырвался', 'вырвалась')}`);
-    this.portrait.anims.play(`${this.portrait.texture.key}_bark`);
+    this.portrait.anims.play(`${this.portrait.texture.key}_bark_down`);
     this.draw();
     this.finish(false, 800);
   }

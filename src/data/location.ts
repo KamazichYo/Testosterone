@@ -1,6 +1,6 @@
 import type { Decal, GroundGrid } from '../art/ground';
 import type { PropPlacement } from '../art/propFactory';
-import type { PersonLook } from '../art/props2';
+import type { HumanLook } from '../art/humanArt';
 import type { LocationId, StationId } from '../core/state';
 import type { DistrictDogConfig } from '../dogs/generator';
 
@@ -9,7 +9,7 @@ export interface NpcDef {
   name: string;
   x: number;
   y: number;
-  look: PersonLook;
+  look: HumanLook;
   sitting?: boolean;
   /** quest this NPC gives (see data/quests.ts) */
   quest?: string;

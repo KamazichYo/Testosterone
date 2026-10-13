@@ -3,10 +3,10 @@ import type { PropPlacement } from '../art/propFactory';
 import type { NpcDef, ShelterDef } from './location';
 
 export const VISITOR_LOOKS: NpcDef['look'][] = [
-  { skin: '#f2c29b', hair: '#3d2a22', top: '#7cc576', bottom: '#4a5f8c' },
-  { skin: '#e8b08a', hair: '#d9a05a', top: '#ff9ec4', bottom: '#5d6670', hat: { kind: 'cap', color: '#ffe066' } },
-  { skin: '#c98a62', hair: '#2a1e22', top: '#f29a4a', bottom: '#3d4f78', glasses: true },
-];
+  { skin: '#f2c29b', hair: '#3d2a22', hairStyle: 'short', top: '#7cc576', topStyle: 'hoodie', bottom: '#4a5f8c', bottomStyle: 'pants', shoes: '#3e3a44' },
+  { skin: '#e8b08a', hair: '#d9a05a', hairStyle: 'long', top: '#ff9ec4', topStyle: 'jacket', bottom: '#5d6670', bottomStyle: 'skirt', shoes: '#8a5aa8', hat: { kind: 'beanie', color: '#ffe066' } },
+  { skin: '#c98a62', hair: '#2a1e22', hairStyle: 'bob', top: '#f29a4a', topStyle: 'tshirt', bottom: '#3d4f78', bottomStyle: 'pants', shoes: '#f1ead8', glasses: true },
+]
 
 const T = TILE;
 

@@ -165,7 +165,7 @@ export function garagesDistrict(): LocationDef {
         y: 52 * T - 1,
         sitting: true,
         quest: 'zina',
-        look: { skin: '#f2c29b', hair: '#d8d4cc', top: '#8a5aa8', bottom: '#4a3d5c', hat: { kind: 'scarf', color: '#e05a5a' }, glasses: true },
+        look: { skin: '#f2c29b', hair: '#d8d4cc', hairStyle: 'bun', top: '#8a5aa8', topStyle: 'cardigan', bottom: '#4a3d5c', bottomStyle: 'skirt', shoes: '#5d4a3a', hat: { kind: 'scarf', color: '#e05a5a' }, glasses: true },
         lines: ['Хорошая сегодня погода!', 'Голубей кормлю — а они всё летят и летят.', 'Береги собачек, внучок.'],
       },
       {
@@ -174,7 +174,7 @@ export function garagesDistrict(): LocationDef {
         x: 27 * T + 12,
         y: 16 * T + 4,
         quest: 'misha',
-        look: { skin: '#e8b08a', hair: '#5a3a28', top: '#4f74a3', bottom: '#3d4f78', hat: { kind: 'cap', color: '#e8e0c8' }, beard: true },
+        look: { skin: '#e8b08a', hair: '#5a3a28', hairStyle: 'short', top: '#d9d2c2', topStyle: 'overalls', accent: '#4f74a3', bottom: '#3d4f78', bottomStyle: 'pants', shoes: '#3e3a44', hat: { kind: 'cap', color: '#e8e0c8' }, beard: true },
         lines: ['Карбюратор барахлит…', 'Атаман у контейнеров — тот ещё вожак, корми его щедрее.', 'Гаражи — это жизнь!'],
       },
       {
@@ -183,7 +183,7 @@ export function garagesDistrict(): LocationDef {
         x: 8 * T,
         y: 46 * T + 4,
         quest: 'kids',
-        look: { skin: '#f2c29b', hair: '#7a4a2e', top: '#e0453f', bottom: '#4a5f8c', hat: { kind: 'cap', color: '#4f9de0' }, small: true },
+        look: { skin: '#f2c29b', hair: '#7a4a2e', hairStyle: 'short', top: '#e0453f', topStyle: 'tshirt', bottom: '#4a5f8c', bottomStyle: 'shorts', shoes: '#4f9de0', hat: { kind: 'cap', color: '#4f9de0' }, small: true },
         lines: ['А ты собак ловишь? Круто!', 'Мы строим замок из песка!'],
       },
       {
@@ -191,7 +191,7 @@ export function garagesDistrict(): LocationDef {
         name: 'Маша',
         x: 4 * T + 8,
         y: 45 * T + 4,
-        look: { skin: '#f2c29b', hair: '#d9a05a', top: '#ff9ec4', bottom: '#7fb2e5', small: true },
+        look: { skin: '#f2c29b', hair: '#d9a05a', hairStyle: 'ponytail', top: '#ff9ec4', topStyle: 'hoodie', bottom: '#7fb2e5', bottomStyle: 'skirt', shoes: '#e05a5a', small: true },
         lines: ['Я хочу щеночка!', 'Белка самая добрая собака, я знаю!'],
       },
     ],

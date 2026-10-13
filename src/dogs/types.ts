@@ -1,6 +1,9 @@
 export type Temperament = 'friendly' | 'shy' | 'grumpy';
 export type EarType = 'up' | 'floppy' | 'half';
-export type TailType = 'curl' | 'straight' | 'fluffy';
+export type TailType = 'curl' | 'straight' | 'fluffy' | 'low';
+export type Build = 'stocky' | 'normal' | 'lanky';
+export type Coat = 'short' | 'long';
+export type HeadShape = 'pointy' | 'normal' | 'short';
 export type Pattern = 'none' | 'spots' | 'saddle' | 'socks' | 'mask';
 export type DogSize = 'small' | 'medium' | 'large';
 export type Trait = 'glutton' | 'coward' | 'cuddly' | 'grumbler' | 'sleepy' | 'fidget';
@@ -26,6 +29,10 @@ export interface DogLook {
   eye: string;
   /** seed for the little details (spot positions etc.) */
   seed: number;
+  /** optional so older saves still load — filled in by fullLook() */
+  build?: Build;
+  coat?: Coat;
+  head?: HeadShape;
 }
 
 export interface DogStats {

@@ -2,7 +2,6 @@ import { Rng } from '../core/rng';
 import { Color, hex, mix, shade } from './color';
 import { PixelCanvas } from './PixelCanvas';
 
-const O = hex('#3b2a2a');
 
 // ------------------------------------------------------------------ vehicles
 
@@ -180,108 +179,6 @@ export function drawOpenGarage(): PixelCanvas {
   pc.ellipse(8, 33, 4, 5, hex('#2a262c'));
   pc.ellipse(8, 33, 1.5, 2, hex('#4a3a33'));
   pc.hline(0, 31, 39, shade(wall, 0.6));
-  return pc;
-}
-
-// ------------------------------------------------------------------ people
-
-export interface PersonLook {
-  skin: string;
-  hair: string;
-  top: string;
-  bottom: string;
-  hat?: { kind: 'scarf' | 'cap' | 'none'; color: string };
-  small?: boolean;
-  glasses?: boolean;
-  beard?: boolean;
-}
-
-/** Front-facing townsperson. pose: 0/1 idle (blink / small motion), 2 = action (wave, knit…), 3 = sit. 16x24 */
-export function drawPerson(look: PersonLook, pose: number): PixelCanvas {
-  const pc = new PixelCanvas(16, 24);
-  const skin = hex(look.skin);
-  const hair = hex(look.hair);
-  const top = hex(look.top);
-  const bottom = hex(look.bottom);
-  const s = look.small ? 3 : 0; // kids are shorter
-  const sit = pose === 3;
-  const y0 = s + (sit ? 2 : 0);
-  // legs / skirt
-  if (sit) {
-    pc.rect(4, 17 + s, 8, 3, bottom);
-    pc.rect(4, 20 + s, 3, 2, shade(bottom, 0.85));
-    pc.rect(9, 20 + s, 3, 2, shade(bottom, 0.85));
-    pc.rect(4, 22, 3, 2, hex('#3e3a44'));
-    pc.rect(9, 22, 3, 2, hex('#3e3a44'));
-  } else {
-    pc.rect(5, 17 + s * 0.6, 3, 5 - s * 0.6, bottom);
-    pc.rect(8, 17 + s * 0.6, 3, 5 - s * 0.6, shade(bottom, 0.88));
-    pc.rect(5, 22, 3, 2, hex('#3e3a44'));
-    pc.rect(8, 22, 3, 2, hex('#3e3a44'));
-  }
-  // torso
-  pc.rect(4, 10 + y0, 8, 8 - y0 + s * 0.6, top);
-  pc.hline(4, 11, 10 + y0, shade(top, 1.15));
-  pc.hline(4, 11, 17 + s * 0.6, shade(top, 0.8));
-  pc.set(8, 12 + y0, shade(top, 0.75)); // button
-  pc.set(8, 14 + y0, shade(top, 0.75));
-  // arms
-  if (pose === 2) {
-    // action: hands together in front (knitting / holding)
-    pc.rect(3, 11 + y0, 2, 4, top);
-    pc.rect(11, 11 + y0, 2, 4, top);
-    pc.rect(5, 15 + y0, 6, 2, skin);
-    pc.set(7, 14 + y0, hex('#e0453f'));
-    pc.set(8, 14 + y0, hex('#e0453f'));
-  } else {
-    pc.rect(2, 11 + y0, 2, 5, top);
-    pc.rect(12, 11 + y0, 2, 5, top);
-    pc.hline(2, 3, 16 + y0, skin);
-    pc.hline(12, 13, 16 + y0, skin);
-  }
-  // head
-  const hy = y0;
-  pc.ellipse(8, 6 + hy, 4.4, 4.4, skin);
-  const hat = look.hat?.kind ?? 'none';
-  if (hat === 'scarf') {
-    const sc = hex(look.hat!.color);
-    pc.ellipse(8, 5 + hy, 5, 4.6, sc);
-    pc.ellipse(8, 7 + hy, 3.3, 3.2, skin);
-    pc.set(4, 10 + hy, sc);
-    pc.set(12, 10 + hy, sc);
-    pc.set(6, 3 + hy, shade(sc, 1.3)); // pattern dots
-    pc.set(10, 4 + hy, shade(sc, 1.3));
-  } else if (hat === 'cap') {
-    const cc = hex(look.hat!.color);
-    pc.ellipse(8, 3 + hy, 4.8, 2.6, cc);
-    pc.hline(4, 11, 5 + hy, shade(cc, 0.75));
-    pc.rect(4, 5 + hy, 1, 3, hair);
-    pc.rect(11, 5 + hy, 1, 3, hair);
-  } else {
-    pc.ellipse(8, 3.5 + hy, 4.6, 2.8, hair);
-    pc.rect(4, 4 + hy, 1, 4, hair);
-    pc.rect(11, 4 + hy, 1, 4, hair);
-  }
-  const blink = pose === 1;
-  if (blink) {
-    pc.hline(6, 6, 7 + hy, O);
-    pc.hline(10, 10, 7 + hy, O);
-  } else {
-    pc.vline(6, 6 + hy, 7 + hy, O);
-    pc.vline(10, 6 + hy, 7 + hy, O);
-  }
-  if (look.glasses) {
-    pc.hline(5, 7, 5 + hy, hex('#8d8d95'));
-    pc.hline(9, 11, 5 + hy, hex('#8d8d95'));
-    pc.set(8, 6 + hy, hex('#8d8d95'));
-  }
-  pc.set(5, 8 + hy, hex('#f39a8f'));
-  pc.set(11, 8 + hy, hex('#f39a8f'));
-  if (look.beard) {
-    pc.ellipse(8, 9.5 + hy, 3, 1.8, hair);
-    pc.hline(7, 9, 9 + hy, shade(skin, 0.7));
-  } else pc.hline(7, 9, 9 + hy, shade(skin, 0.75));
-  pc.outline(0.4);
   return pc;
 }
 

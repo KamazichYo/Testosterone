@@ -21,8 +21,8 @@ export class Npc {
   ) {
     const key = `npc_${def.id}`;
     this.shadow = scene.add.image(def.x, def.y, 'shadow_s').setDepth(def.y - 0.5);
-    this.sprite = scene.add.sprite(def.x, def.y, key, def.sitting ? 3 : 0).setOrigin(0.5, 23 / 24).setDepth(def.y + (def.sitting ? 2 : 0));
-    this.mark = scene.add.image(def.x, def.y - 30, 'icon_bang').setDepth(def.y + 2000).setVisible(false);
+    this.sprite = scene.add.sprite(def.x, def.y, key, def.sitting ? 3 : 0).setOrigin(0.5, 29 / 30).setDepth(def.y + (def.sitting ? 2 : 0));
+    this.mark = scene.add.image(def.x, def.y - 36, 'icon_bang').setDepth(def.y + 2000).setVisible(false);
     this.bubbleBg = scene.add.graphics();
     // world text is drawn at a higher resolution, then scaled down to world units
     this.bubbleText = scene.add.text(0, 0, '', {
@@ -33,7 +33,7 @@ export class Npc {
       wordWrap: { width: 560, useAdvancedWrap: true },
     });
     this.bubbleText.setScale(0.16).setOrigin(0.5, 1);
-    this.bubble = scene.add.container(def.x, def.y - 30, [this.bubbleBg, this.bubbleText]).setDepth(100000).setVisible(false);
+    this.bubble = scene.add.container(def.x, def.y - 36, [this.bubbleBg, this.bubbleText]).setDepth(100000).setVisible(false);
   }
 
   get x(): number {
@@ -102,10 +102,10 @@ export class Npc {
       this.scene.tweens.add({ targets: this.sprite, scaleY: 1.04, yoyo: true, duration: 180, repeat: 1 });
       if (!this.def.sitting) this.scene.time.delayedCall(800, () => this.sprite.setFrame(base));
     }
-    this.mark.setY(this.def.y - 30 - Math.abs(Math.sin(t / 260)) * 3);
+    this.mark.setY(this.def.y - (this.def.sitting ? 31 : 36) - Math.abs(Math.sin(t / 260)) * 3);
     if (this.bubble.visible) {
       this.hideTimer -= dt;
-      this.bubble.setY(this.def.y - (this.def.sitting ? 25 : 28) - (this.mark.visible ? 6 : 0));
+      this.bubble.setY(this.def.y - (this.def.sitting ? 30 : 34) - (this.mark.visible ? 6 : 0));
       if (this.hideTimer <= 0) {
         this.shown = '';
         this.scene.tweens.add({ targets: this.bubble, alpha: 0, scale: 0.8, duration: 180, onComplete: () => this.bubble.setVisible(false) });

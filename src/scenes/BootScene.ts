@@ -11,13 +11,12 @@ import {
   drawCat,
   drawDust,
   drawLeaf,
-  drawPerson,
   drawPickup,
   drawPigeon,
   drawSplash,
-  PersonLook,
 } from '../art/props2';
 import { ensureSheet, ensureTexture } from '../art/textures';
+import { drawPersonFrames, HUMAN_H, HUMAN_W, HumanLook } from '../art/humanArt';
 import { gameState } from '../core/state';
 import { garagesDistrict } from '../data/garages';
 import { VISITOR_LOOKS } from '../data/shelter';
@@ -48,6 +47,7 @@ export class BootScene extends Phaser.Scene {
       anim('throw', f.throw, 1);
       anim('carryIdle', f.carryIdle, 1);
       anim('carryWalk', f.carryWalk, 9);
+      anim('crouch', f.crouch, 1);
     }
 
     for (const name of ICON_NAMES) ensureTexture(this, `icon_${name}`, () => drawIcon(name));
@@ -68,9 +68,9 @@ export class BootScene extends Phaser.Scene {
     ensureTexture(this, 'van', drawVan);
     ensureTexture(this, 'carrier', drawCarrier);
     for (let i = 0; i <= 3; i++) ensureTexture(this, `food_${i}`, () => drawFoodPile(i / 3));
-    ensureTexture(this, 'shadow_s', () => drawShadow(12, 4));
-    ensureTexture(this, 'shadow_m', () => drawShadow(18, 5));
-    ensureTexture(this, 'shadow_l', () => drawShadow(24, 6));
+    ensureTexture(this, 'shadow_s', () => drawShadow(13, 4));
+    ensureTexture(this, 'shadow_m', () => drawShadow(20, 6));
+    ensureTexture(this, 'shadow_l', () => drawShadow(28, 7));
     ensureTexture(this, 'shadow_xl', () => drawShadow(50, 8));
     for (const k of ['bone', 'coin', 'wrench', 'ball'] as const) ensureTexture(this, `pickup_${k}`, () => drawPickup(k));
     for (let i = 0; i < 3; i++) ensureTexture(this, `leaf_${i}`, () => drawLeaf(i));
@@ -87,9 +87,9 @@ export class BootScene extends Phaser.Scene {
     });
 
     // townsfolk: 4 poses each (idle, blink, action, sit)
-    const people: [string, PersonLook][] = garagesDistrict().npcs.map((n) => [n.id, n.look]);
-    VISITOR_LOOKS.forEach((l, i) => people.push([`visitor_${i}`, l]));
-    for (const [id, look] of people) ensureSheet(this, `npc_${id}`, () => strip([0, 1, 2, 3].map((p) => drawPerson(look, p))), 16, 24);
+    const people: [string, HumanLook, 'wave' | 'knit'][] = garagesDistrict().npcs.map((n) => [n.id, n.look, n.sitting ? 'knit' : 'wave']);
+    VISITOR_LOOKS.forEach((l, i) => people.push([`visitor_${i}`, l, 'wave']));
+    for (const [id, look, action] of people) ensureSheet(this, `npc_${id}`, () => strip(drawPersonFrames(look, action)), HUMAN_W, HUMAN_H);
 
     const start = () => {
       document.getElementById('loading')?.remove();

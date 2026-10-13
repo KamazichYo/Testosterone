@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
-import { DOG_FRAME_H } from '../art/dogArt';
+import { DOG_ORIGIN_Y } from '../art/dogArt';
 import type { DogData } from '../dogs/types';
-import { dogTexture } from './Dog';
+import { DogActor, dogTexture } from './Dog';
 
 /**
  * A dog without physics — used in the shelter, where dogs are placed in pens, on stations and in kennels.
@@ -37,7 +37,7 @@ export class DogPuppet {
     this.y = this.ty = y;
     this.texKey = dogTexture(scene, dog);
     this.shadow = scene.add.image(x, y, dog.look.size === 'large' ? 'shadow_l' : 'shadow_m');
-    this.view = scene.add.sprite(x, y, this.texKey, 0).setOrigin(0.5, 22 / DOG_FRAME_H);
+    this.view = scene.add.sprite(x, y, this.texKey, 0).setOrigin(0.5, DOG_ORIGIN_Y);
     this.mood = scene.add.image(x, y, 'icon_heart').setVisible(false);
     this.play('idle');
   }
@@ -52,10 +52,14 @@ export class DogPuppet {
     this.play(a);
   }
 
+  /** facing on screen */
+  dir: 'side' | 'down' | 'up' = 'side';
+
   play(name: string): void {
-    if (name === this.anim) return;
-    this.anim = name;
-    this.view.anims.play(`${this.texKey}_${name}`);
+    const n = DogActor.directional(name, this.dir);
+    if (n === this.anim) return;
+    this.anim = n;
+    this.view.anims.play(`${this.texKey}_${n}`);
   }
 
   /** Default animation when standing still. */
@@ -109,6 +113,7 @@ export class DogPuppet {
       this.x += (dx / d) * step;
       this.y += (dy / d) * step;
       if (Math.abs(dx) > 1) this.facingLeft = dx < 0;
+      this.dir = Math.abs(dy) > Math.abs(dx) * 1.3 ? (dy > 0 ? 'down' : 'up') : 'side';
       this.play(this.speed > 50 ? 'run' : 'walk');
     } else {
       if (this.onArrive) {
@@ -116,7 +121,10 @@ export class DogPuppet {
         this.onArrive = null;
         cb();
       }
-      if (this.anim === 'walk' || this.anim === 'run') this.play(this.restAnim);
+      if (this.anim.startsWith('walk') || this.anim.startsWith('run')) {
+        if (this.dir === 'up') this.dir = 'side';
+        this.play(this.restAnim);
+      }
       if (this.wanderRect) {
         this.wanderTimer -= dt;
         if (this.wanderTimer <= 0) {
@@ -126,8 +134,8 @@ export class DogPuppet {
         }
       }
     }
-    const top = this.dog.look.size === 'large' ? 22 : this.dog.look.size === 'medium' ? 20 : 17;
-    this.view.setPosition(this.x, this.y - this.hop).setScale(this.sx, this.sy).setFlipX(this.facingLeft).setDepth(this.y);
+    const top = this.dog.look.size === 'large' ? 28 : this.dog.look.size === 'medium' ? 25 : 21;
+    this.view.setPosition(this.x, this.y - this.hop).setScale(this.sx, this.sy).setFlipX(this.dir === 'side' && this.facingLeft).setDepth(this.y);
     this.shadow.setPosition(this.x, this.y).setDepth(this.y - 0.5);
     this.mood.setPosition(this.x + (this.facingLeft ? -4 : 4), this.y - top - this.hop - Math.sin(this.scene.time.now / 220) * 1.5).setDepth(this.y + 1000);
   }

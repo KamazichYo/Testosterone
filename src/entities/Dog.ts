@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { DOG_FRAME_H, DOG_FRAME_W, DOG_FRAMES, drawDogSheet } from '../art/dogArt';
+import { DOG_FRAME_H, DOG_FRAME_W, DOG_FRAMES, DOG_ORIGIN_Y, drawDogSheet } from '../art/dogArt';
 import { ensureSheet } from '../art/textures';
 import { play } from '../core/sfx';
 import { applyMeal, isAggressive, reactToPlayer, SMELL_RADIUS, wantsFood } from '../dogs/behaviour';
@@ -49,6 +49,15 @@ export function dogTexture(scene: Phaser.Scene, dog: DogData): string {
     anim('happy', DOG_FRAMES.happy, 5);
     anim('sit', DOG_FRAMES.sit, 4);
     anim('shake', DOG_FRAMES.shake, 12);
+    // facing the camera / walking away
+    anim('idle_down', DOG_FRAMES.idle_down, 1.5);
+    anim('walk_down', DOG_FRAMES.walk_down, 9);
+    anim('run_down', DOG_FRAMES.walk_down, 14);
+    anim('sit_down', DOG_FRAMES.sit_down, 3);
+    anim('bark_down', [DOG_FRAMES.bark_down[0], DOG_FRAMES.idle_down[0]], 5);
+    anim('idle_up', DOG_FRAMES.idle_up, 1);
+    anim('walk_up', DOG_FRAMES.walk_up, 9);
+    anim('run_up', DOG_FRAMES.walk_up, 14);
   }
   return key;
 }
@@ -74,7 +83,7 @@ export class DogActor extends Actor {
 
   constructor(scene: Phaser.Scene, dog: DogData, x = dog.home.x, y = dog.home.y) {
     const key = dogTexture(scene, dog);
-    super(scene, x, y, 14, 5, key, 22 / DOG_FRAME_H, dog.look.size === 'large' ? 'shadow_l' : 'shadow_m');
+    super(scene, x, y, 14, 5, key, DOG_ORIGIN_Y, dog.look.size === 'large' ? 'shadow_l' : 'shadow_m');
     this.dog = dog;
     this.texKey = key;
     this.baseSpeed = SPEED[dog.look.size] + (dog.traits.includes('fidget') ? 10 : 0);
@@ -103,10 +112,38 @@ export class DogActor extends Actor {
     this.playAnim(name || 'idle');
   }
 
+  /** which way the dog is facing on screen: profile, toward the camera, or away */
+  private view3: 'side' | 'down' | 'up' = 'side';
+
   private playAnim(name: string): void {
-    if (this.animName === name && this.view.anims.isPlaying) return;
-    this.animName = name;
-    this.view.anims.play(`${this.texKey}_${name}`);
+    const dirName = DogActor.directional(name, this.view3);
+    if (this.animName === dirName && this.view.anims.isPlaying) return;
+    this.animName = dirName;
+    this.view.anims.play(`${this.texKey}_${dirName}`);
+  }
+
+  /** Front/back variants exist for walking, idling, sitting and barking. */
+  static directional(name: string, dir: 'side' | 'down' | 'up'): string {
+    if (dir === 'side') return name;
+    if (dir === 'down' && ['idle', 'walk', 'run', 'sit', 'bark'].includes(name)) return `${name}_down`;
+    if (dir === 'up' && ['idle', 'walk', 'run'].includes(name)) return `${name}_up`;
+    return name;
+  }
+
+  private updateFacing(): void {
+    const v = this.body.velocity;
+    const sp = v.length();
+    if (sp > 10) {
+      const ax = Math.abs(v.x);
+      const ay = Math.abs(v.y);
+      if (this.view3 === 'side') {
+        if (ay > ax * 1.4) this.view3 = v.y > 0 ? 'down' : 'up';
+      } else if (ax > ay * 1.1) this.view3 = 'side';
+      else this.view3 = v.y > 0 ? 'down' : 'up';
+    } else if (this.view3 === 'up') {
+      // standing still facing away looks odd for long — turn sideways
+      this.view3 = 'side';
+    }
   }
 
   private enter(mode: DogMode, ms = 0): void {
@@ -255,8 +292,9 @@ export class DogActor extends Actor {
         this.barkTimer -= dt;
         if (this.barkTimer <= 0) {
           this.barkTimer = 1100 + Math.random() * 600;
-          this.animName = 'bark';
-          this.view.anims.play(`${this.texKey}_bark`);
+          this.view3 = p.y > this.y + 14 && Math.abs(p.x - this.x) < Math.abs(p.y - this.y) ? 'down' : 'side';
+          this.animName = DogActor.directional('bark', this.view3);
+          this.view.anims.play(`${this.texKey}_${this.animName}`);
           this.boing(0.14, 200);
           if (dist < 110) play('bark', this.pitch);
         }
@@ -361,6 +399,8 @@ export class DogActor extends Actor {
         } else {
           this.want(0, 0);
           this.faceX(p.x - this.x, 1);
+          // sit facing you when you are below, in profile otherwise
+          this.view3 = p.y > this.y + 6 ? 'down' : 'side';
           this.playAnim('sit');
         }
         break;
@@ -368,10 +408,11 @@ export class DogActor extends Actor {
     }
 
     this.steer(this.desired.x, this.desired.y, dt, this.response);
+    this.updateFacing();
     const v = this.body.velocity;
     if (this.mode !== 'alert' && this.mode !== 'eat' && Math.abs(v.x) > 6) this.faceX(v.x, 6);
     // animation speed follows actual speed so feet don't skate
-    if (this.animName === 'walk' || this.animName === 'run') {
+    if (this.animName.startsWith('walk') || this.animName.startsWith('run')) {
       this.view.anims.msPerFrame = Phaser.Math.Clamp(3200 / Math.max(10, this.speed), 55, 160);
     }
     this.updateMood();
@@ -424,8 +465,8 @@ export class DogActor extends Actor {
 
   syncView(): void {
     super.syncView();
-    this.view.setFlipX(this.facingLeft);
-    const top = this.dog.look.size === 'large' ? 22 : this.dog.look.size === 'medium' ? 20 : 17;
+    this.view.setFlipX(this.view3 === 'side' && this.facingLeft);
+    const top = this.dog.look.size === 'large' ? 28 : this.dog.look.size === 'medium' ? 25 : 21;
     const t = this.scene.time.now;
     this.mood.setPosition(this.x + (this.facingLeft ? -4 : 4), this.y - top - this.hop - Math.sin(t / 220) * 1.5).setDepth(this.y + 1000);
   }
