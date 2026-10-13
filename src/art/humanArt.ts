@@ -191,8 +191,9 @@ export function drawHuman(look: HumanLook, pose: HumanPose): PixelCanvas {
     const sy = Math.round(shoulderY + torsoH * 0.6);
     if (side || back) pc.hline(Math.round(tx0 + 1), Math.round(tx0 + torsoW - 2), sy, STRIPE);
     else {
-      pc.hline(Math.round(tx0 + 1), Math.round(cx - 2), sy, STRIPE);
-      pc.hline(Math.round(cx + 1), Math.round(tx0 + torsoW - 2), sy, STRIPE);
+      // front: just a small reflective patch on each side
+      pc.set(Math.round(tx0 + 1), sy, STRIPE);
+      pc.set(Math.round(tx0 + torsoW - 2), sy, STRIPE);
     }
   }
   if (look.topStyle === 'hoodie' && !back && !side) {
@@ -314,16 +315,13 @@ function drawHead(pc: PixelCanvas, look: HumanLook, pose: HumanPose, hx: number,
       pc.set(Math.round(hx - 1.5), ey + 2, t(skin, -1));
       if (look.glasses) {
         // thin round-ish frames around the eyes, bridge in the middle
-        const g = hex('#8d8d95');
+        const g = hex('#b8b4c0');
         for (const ex of [lx, rx]) {
           pc.hline(ex - 1, ex + 2, ey - 1, g);
           pc.set(ex - 1, ey, g);
-          pc.set(ex - 1, ey + 1, g);
           pc.set(ex + 2, ey, g);
-          pc.set(ex + 2, ey + 1, g);
-          pc.hline(ex, ex + 1, ey + 2, g);
         }
-        pc.set(Math.round(hx), ey, g);
+        pc.set(Math.round(hx), ey - 1, g);
       }
       if (look.beard) {
         pc.ellipse(hx, hy + r * 0.62, r * 0.7, r * 0.4, (_nx, ny) => t(hair, ny > 0.3 ? -1 : 0));
