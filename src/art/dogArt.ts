@@ -14,8 +14,11 @@ export const DOG_FRAMES = {
   bark: [8],
   sleep: [9],
   happy: [10, 11],
+  sit: [12, 13],
+  shake: [14, 15],
+  sleepBreath: [9, 16],
 } as const;
-const FRAME_COUNT = 12;
+const FRAME_COUNT = 17;
 
 export interface DogLookState {
   /** 0..1 — mud, matted fur, dull colours */
@@ -35,6 +38,11 @@ interface Pose {
   mouth: 'closed' | 'open' | 'chew' | 'smile';
   lying: boolean;
   eyesClosed: boolean;
+  sitting?: boolean;
+  /** shaking water off: rows of fur shifted ±shake px */
+  shake?: number;
+  /** extra body height while breathing in sleep */
+  breathe?: number;
 }
 
 const POSES: Pose[] = [
@@ -50,6 +58,11 @@ const POSES: Pose[] = [
   { legPhase: -1, tailPhase: 0, head: 'rest', mouth: 'closed', lying: true, eyesClosed: true },
   { legPhase: -1, tailPhase: 0, head: 'up', mouth: 'smile', lying: false, eyesClosed: true },
   { legPhase: -1, tailPhase: 2, head: 'up', mouth: 'smile', lying: false, eyesClosed: true },
+  { legPhase: -1, tailPhase: 1, head: 'up', mouth: 'smile', lying: false, eyesClosed: false, sitting: true },
+  { legPhase: -1, tailPhase: 2, head: 'up', mouth: 'smile', lying: false, eyesClosed: false, sitting: true },
+  { legPhase: -1, tailPhase: 1, head: 'up', mouth: 'closed', lying: false, eyesClosed: true, shake: 1 },
+  { legPhase: -1, tailPhase: 2, head: 'up', mouth: 'closed', lying: false, eyesClosed: true, shake: -1 },
+  { legPhase: -1, tailPhase: 0, head: 'rest', mouth: 'closed', lying: true, eyesClosed: true, breathe: 0.6 },
 ];
 
 const SIZE = {
@@ -122,7 +135,19 @@ export function drawDogFrame(look: DogLook, frame: number, st: DogLookState): Pi
     }
   };
   let nearLegs: () => void;
-  if (!pose.lying) {
+  if (pose.sitting) {
+    drawLeg(frontX + 2, false, 0, 0);
+    nearLegs = () => {
+      // haunch + folded hind paw
+      const hx0 = bx - s.rx * 0.42;
+      pc.ellipse(hx0, ground - s.ry * 0.95, s.rx * 0.52, s.ry * 0.98, (nx, ny) =>
+        ny > 0.5 ? shade(base, 0.82) : nx < -0.4 && ny < -0.2 ? light : base,
+      );
+      pc.rect(Math.round(hx0 + 1), ground - 1, 4, 2, look.pattern === 'socks' ? accent : base);
+      pc.set(Math.round(hx0 + 4), ground - 1, light);
+      drawLeg(frontX, true, 0, 0);
+    };
+  } else if (!pose.lying) {
     const p = pose.legPhase;
     const nf = p < 0 ? 0 : step[p];
     const nb = p < 0 ? 0 : -step[p];
@@ -148,7 +173,14 @@ export function drawDogFrame(look: DogLook, frame: number, st: DogLookState): Pi
   const rearX = bx - s.rx + 0.5;
   const tailY = by - s.ry * 0.4;
   const wag = [0, 1, -1][pose.tailPhase];
-  if (pose.lying) {
+  if (pose.sitting) {
+    // tail sweeps the ground beside the haunch
+    const tx = rearX - 1 - Math.abs(wag);
+    const ty = ground - 2 - (wag + 1);
+    pc.line(rearX + 2, ground - 1, tx, ty, base);
+    pc.line(rearX + 2, ground, tx, ty + 1, dark);
+    pc.set(tx, ty, look.tail === 'fluffy' ? accent : base);
+  } else if (pose.lying) {
     pc.rect(Math.round(rearX - 2), ground - 1, 5, 2, dark);
     pc.set(Math.round(rearX - 2), ground - 1, look.tail === 'fluffy' ? accent : dark);
   } else if (look.tail === 'curl') {
@@ -184,9 +216,13 @@ export function drawDogFrame(look: DogLook, frame: number, st: DogLookState): Pi
     }
   }
   const ribsVisible = st.hungry && !pose.lying;
-  pc.ellipse(bx, by, s.rx, pose.lying ? s.ry - 0.3 : s.ry, (nx, ny) => {
-    const px = bx + nx * s.rx;
-    const py = by + ny * s.ry;
+  const bodyCx = pose.sitting ? bx + 1.5 : bx;
+  const bodyCy = pose.sitting ? by - 1.5 : by;
+  const bodyRx = pose.sitting ? s.rx * 0.78 : s.rx;
+  const bodyRy = (pose.lying ? s.ry - 0.3 : s.ry) + (pose.breathe ?? 0) + (pose.sitting ? 0.6 : 0);
+  pc.ellipse(bodyCx, bodyCy, bodyRx, bodyRy, (nx, ny) => {
+    const px = bodyCx + nx * bodyRx;
+    const py = bodyCy + ny * bodyRy;
     let c = base;
     if (look.pattern === 'saddle' && ny < 0.05 && nx < 0.7) c = patch;
     for (const sp of spots) if ((px - sp.x) ** 2 + (py - sp.y) ** 2 < sp.r * sp.r) c = patch;
@@ -213,7 +249,8 @@ export function drawDogFrame(look: DogLook, frame: number, st: DogLookState): Pi
     hx += 1.5;
     hy = by + 1.5;
   } else if (pose.head === 'up') {
-    hy -= 1;
+    hy -= pose.sitting ? 3 : 1;
+    if (pose.sitting) hx -= 0.5;
   } else if (pose.head === 'rest') {
     hx = bx + s.rx + 1;
     hy = ground - s.head + 0.8;
@@ -313,6 +350,27 @@ export function drawDogFrame(look: DogLook, frame: number, st: DogLookState): Pi
     const ty = Math.round(hy - r + (look.ears === 'floppy' ? 2 : 0));
     pc.rect(tx, ty, 2, 2, TAG);
     pc.set(tx + 1, ty + 1, shade(TAG, 0.75));
+  }
+
+  // ---------- shaking off water ----------
+  if (pose.shake) {
+    const copy = pc.data.slice();
+    const top = Math.round(by + s.ry);
+    for (let y = 0; y < top; y++) {
+      const off = ((y >> 1) & 1 ? 1 : -1) * pose.shake;
+      for (let x = 0; x < pc.w; x++) {
+        const sx = x - off;
+        pc.data[y * pc.w + x] = sx >= 0 && sx < pc.w ? copy[y * pc.w + sx] : 0;
+      }
+    }
+    const drop = hex('#8fd3ff');
+    for (let i = 0; i < 7; i++) {
+      const a = hash2(i, frame, look.seed) * Math.PI * 2;
+      const rr = s.rx + 2 + hash2(i, 7, look.seed) * 3;
+      const x = bx + Math.cos(a) * rr;
+      const y = by - 2 + Math.sin(a) * (s.ry + 3);
+      if (!pc.isSolid(x, y)) pc.set(x, y, drop);
+    }
   }
 
   // ---------- dirt ----------

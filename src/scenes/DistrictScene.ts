@@ -1,31 +1,16 @@
 import Phaser from 'phaser';
-import { bakeGround, TILE } from '../art/ground';
-import { drawProp, PROP_COLLIDER, propKey } from '../art/propFactory';
-import { ensureTexture } from '../art/textures';
 import { play, vibrate } from '../core/sfx';
 import { gameState } from '../core/state';
-import { DistrictDef, garagesDistrict } from '../data/garages';
+import { garagesDistrict } from '../data/garages';
+import { QUESTS } from '../data/quests';
 import { applyCatchFail, catchDifficulty, catchReward, CatchDifficulty, isAggressive, isTrusting } from '../dogs/behaviour';
 import { generateDistrictDogs } from '../dogs/generator';
 import { g, type DogData } from '../dogs/types';
+import { Pickup } from '../entities/Ambient';
 import { DogActor } from '../entities/Dog';
 import { FoodPile } from '../entities/FoodPile';
-import { Player } from '../entities/Player';
-import { controls } from '../ui/controls';
-
-export type ActionKind = 'none' | 'feed' | 'catch' | 'deposit' | 'refill' | 'carrying' | 'nofood';
-
-export interface ContextInfo {
-  kind: ActionKind;
-  hint: string;
-  /** dog shown in the info card */
-  dog: DogData | null;
-  dogMode: string | null;
-  /** direction (screen space, normalised) to the van when it is off-screen and needed */
-  vanArrow: { x: number; y: number } | null;
-  caught: number;
-  total: number;
-}
+import { Npc } from '../entities/Npc';
+import { ActionSpec, ContextInfo, WorldScene } from './WorldScene';
 
 export interface CatchRequest {
   dog: DogData;
@@ -34,128 +19,218 @@ export interface CatchRequest {
 
 const THROW_RANGE = 110;
 const CATCH_RANGE = 26;
-const VAN_RANGE = 42;
-const WORLD_VIEW = 200; // ~world pixels visible across the narrow side
+const VAN_RANGE = 44;
+const TALK_RANGE = 30;
+const WAVE_DELAY = 90_000;
+const ZINA_FOOD_COOLDOWN = 60_000;
 
-export class DistrictScene extends Phaser.Scene {
-  private def!: DistrictDef;
-  private player!: Player;
+const A = {
+  feed: { id: 'feed', label: 'Кинуть корм', icon: 'food', tone: 'orange' },
+  catch: { id: 'catch', label: 'Поймать', icon: 'hand', tone: 'green' },
+  deposit: { id: 'deposit', label: 'В фургон', icon: 'van', tone: 'green' },
+  talk: { id: 'talk', label: 'Поговорить', icon: 'talk', tone: 'blue' },
+  pet: { id: 'pet', label: 'Погладить', icon: 'heart', tone: 'blue' },
+} satisfies Record<string, ActionSpec>;
+
+export class DistrictScene extends WorldScene {
   private dogs: DogActor[] = [];
   private foods: FoodPile[] = [];
-  private walls: Phaser.GameObjects.Zone[] = [];
+  private npcs: Npc[] = [];
+  private pickups: Pickup[] = [];
   private van!: Phaser.GameObjects.Image;
-  private ctxInfo: ContextInfo | null = null;
   private ctxTarget: DogActor | null = null;
-  private lastCtxKey = '';
+  private ctxNpc: Npc | null = null;
   private lastThrow = 0;
   private catching: DogActor | null = null;
-  private totalDogs = 0;
+  private nearVanBefore = false;
+  private greeted = new Set<string>();
+  private waveCheck = 0;
 
   constructor() {
     super('District');
   }
 
   create(): void {
-    this.def = garagesDistrict();
-    const def = this.def;
-    const W = def.cols * TILE;
-    const H = def.rows * TILE;
+    gameState.data.location = 'garages';
+    gameState.save();
+    const def = garagesDistrict();
     this.dogs = [];
     this.foods = [];
-    this.walls = [];
+    this.npcs = [];
+    this.pickups = [];
     this.catching = null;
-    this.lastCtxKey = '';
-
-    const groundKey = ensureTexture(this, `ground_${def.id}`, () => bakeGround(def.ground, def.decals, 1));
-    this.add.image(0, 0, groundKey).setOrigin(0, 0).setDepth(-100000);
-    this.physics.world.setBounds(0, 0, W, H);
-
-    for (const p of def.props) {
-      const key = ensureTexture(this, propKey(p), () => drawProp(p));
-      if (p.kind === 'tree' || p.kind === 'treeAutumn' || p.kind === 'birch') {
-        this.add.image(p.x, p.y - 1, 'shadow_l').setScale(1.3, 1.2).setDepth(p.y - 1);
-      }
-      this.add.image(p.x, p.y, key).setOrigin(0.5, 1).setDepth(p.y);
-      const col = PROP_COLLIDER[p.kind];
-      if (!col) continue;
-      const h = p.kind === 'pipeV' ? (p.length ?? 0) - 6 : col.h;
-      if (h > 0) this.addWall(p.x, p.y - h / 2, col.w, h);
-    }
+    this.greeted.clear();
+    this.buildWorld(def);
 
     // the shelter van
     this.add.image(def.van.x, def.van.y - 1, 'shadow_xl').setDepth(def.van.y - 1);
     this.van = this.add.image(def.van.x, def.van.y, 'van').setOrigin(0.5, 1).setDepth(def.van.y);
     this.addWall(def.van.x, def.van.y - 7, 52, 12);
+    // arriving from the shelter: start next to the van
+    this.player.setPosition(def.playerStart.x, def.playerStart.y);
 
-    this.player = new Player(this, def.playerStart.x, def.playerStart.y);
-    this.physics.add.collider(this.player, this.walls);
-
+    for (const n of def.npcs) this.npcs.push(new Npc(this, n));
+    this.spawnPickups();
     this.spawnDogs();
-
-    const cam = this.cameras.main;
-    cam.setBounds(0, 0, W, H);
-    cam.startFollow(this.player, true, 0.14, 0.14);
-    cam.setFollowOffset(0, -20); // keep the hero above the bottom UI
-    cam.setRoundPixels(true);
-    this.layout();
-    this.scale.on('resize', this.layout, this);
 
     this.events.on('dog-bite', this.onBite, this);
     this.events.on('dog-fed', this.onFed, this);
-    this.game.events.on('action', this.onAction, this);
     this.game.events.on('catch-result', this.onCatchResult, this);
-    this.game.events.on('district-restart', this.restartDistrict, this);
-    this.events.once('shutdown', () => {
-      this.scale.off('resize', this.layout, this);
-      this.game.events.off('action', this.onAction, this);
-      this.game.events.off('catch-result', this.onCatchResult, this);
-      this.game.events.off('district-restart', this.restartDistrict, this);
-    });
+    this.events.once('shutdown', () => this.game.events.off('catch-result', this.onCatchResult, this));
   }
 
-  private addWall(x: number, y: number, w: number, h: number): void {
-    const z = this.add.zone(x, y, w, h);
-    this.physics.add.existing(z, true);
-    this.walls.push(z);
-  }
+  // ---------------------------------------------------------------- spawning
 
   private spawnDogs(): void {
-    const all = generateDistrictDogs(this.def.dogs, 1);
-    this.totalDogs = all.length;
-    for (const d of all) {
-      if (gameState.data.caught.includes(d.id)) continue;
-      const actor = new DogActor(this, d);
-      this.physics.add.collider(actor, this.walls);
-      this.dogs.push(actor);
+    const cfg = this.def.dogs!;
+    const wave = gameState.wave(cfg.districtId);
+    const count = wave === 1 ? cfg.count : 5 + (wave % 3);
+    const wild = generateDistrictDogs({ ...cfg, count, hasLeader: wave === 1 }, wave).map((d) => ({ ...d, id: `${d.id}-w${wave}` }));
+    for (const d of wild) {
+      if (gameState.data.removed.includes(d.id)) continue;
+      this.addDog(d);
+    }
+    // dogs that went through the shelter come back calm, clean and tagged
+    for (const d of gameState.releasedDogs(cfg.districtId)) this.addDog(d);
+  }
+
+  private addDog(d: DogData): DogActor {
+    const actor = new DogActor(this, d);
+    this.physics.add.collider(actor.feet, this.walls);
+    this.dogs.push(actor);
+    return actor;
+  }
+
+  private spawnPickups(): void {
+    for (const p of this.def.pickups) {
+      if (gameState.data.picked.includes(p.id)) continue;
+      if (p.kind === 'wrench' && !(gameState.quest('misha') === 'active' && !gameState.data.questProgress.misha)) continue;
+      if (p.kind === 'ball' && !(gameState.quest('kids') === 'active' && !gameState.data.questProgress.kids)) continue;
+      if (this.pickups.some((x) => x.id === p.id)) continue;
+      this.pickups.push(new Pickup(this, p.id, p.kind, p.x, p.y));
     }
   }
 
-  private layout(): void {
-    const { width, height } = this.scale.gameSize;
-    const mapW = this.def.cols * TILE;
-    const mapH = this.def.rows * TILE;
-    // never show more than the map itself (wide screens), otherwise ~WORLD_VIEW px across
-    const minZoom = Math.ceil(Math.max(width / mapW, height / mapH));
-    const zoom = Math.max(1, minZoom, Math.round(Math.min(width / WORLD_VIEW, height / (WORLD_VIEW * 1.7))));
-    this.cameras.main.setSize(width, height).setZoom(zoom);
+  private get wildDogs(): DogActor[] {
+    return this.dogs.filter((d) => d.dog.state === 'wild');
   }
 
-  update(_time: number, rawDelta: number): void {
-    const dt = Math.min(rawDelta, 50);
-    this.player.drive(controls.x, controls.y);
-    this.player.syncAttachments();
+  protected threats(): { x: number; y: number }[] {
+    return [this.player, ...this.dogs.filter((d) => d.speed > 30)];
+  }
+
+  protected dogPositions(): { x: number; y: number }[] {
+    return this.dogs;
+  }
+
+  // ---------------------------------------------------------------- update
+
+  protected tickWorld(dt: number): void {
     const world = { player: this.player, foods: this.foods };
     for (const d of this.dogs) {
       d.tick(dt, world);
-      d.syncAttachments(this.time.now);
+      d.syncView();
     }
     this.foods = this.foods.filter((f) => !f.eaten || f.claimedBy?.mode === 'eat');
-    this.updateContext();
+    for (const n of this.npcs) n.update(dt);
+    for (const p of this.pickups) p.update(dt);
+    this.collectPickups();
+    this.greetNpcs();
+    this.autoRefill();
+
+    this.waveCheck -= dt;
+    if (this.waveCheck <= 0) {
+      this.waveCheck = 500;
+      this.checkWave();
+    }
   }
 
-  // ---------------------------------------------------------------- context / hints
+  private collectPickups(): void {
+    for (const p of this.pickups) {
+      if (p.collected || !this.near(p.x, p.y, 12)) continue;
+      if (p.kind === 'bone') {
+        if (gameState.data.food >= gameState.foodMax) continue;
+        gameState.addFood(1);
+        this.floatText(p.x, p.y - 10, '+1 корм', '#f6d9ad');
+      } else if (p.kind === 'coin') {
+        gameState.addCoins(5);
+        this.floatText(p.x, p.y - 10, '+5');
+        play('coin');
+      } else {
+        const q = p.kind === 'wrench' ? 'misha' : 'kids';
+        gameState.data.questProgress[q] = 1;
+        gameState.commit();
+        this.toast(p.kind === 'wrench' ? 'Нашёлся гаечный ключ!' : 'Нашёлся мячик!', 'star');
+        play('ding');
+      }
+      if (p.kind === 'bone') play('pop');
+      p.collect(this.player.x, this.player.y);
+      gameState.data.picked.push(p.id);
+      gameState.save();
+    }
+    this.pickups = this.pickups.filter((p) => !p.collected);
+  }
 
-  private nearestDog(maxDist: number, filter: (d: DogActor) => boolean = () => true): DogActor | null {
+  private greetNpcs(): void {
+    for (const n of this.npcs) {
+      const st = this.questStatus(n);
+      n.setMark(st === 'offer' || st === 'ready', st === 'ready');
+      const close = this.near(n.x, n.y, 44);
+      if (close && !this.greeted.has(n.def.id)) {
+        this.greeted.add(n.def.id);
+        if (st === 'none') n.say(Phaser.Utils.Array.GetRandom(n.def.lines));
+      } else if (!close && this.greeted.has(n.def.id) && !this.near(n.x, n.y, 70)) this.greeted.delete(n.def.id);
+    }
+  }
+
+  /** What the NPC can do for you right now. */
+  private questStatus(n: Npc): 'offer' | 'active' | 'ready' | 'gift' | 'none' {
+    const id = n.def.quest;
+    if (!id) return 'none';
+    const st = gameState.quest(id);
+    if (!st) return 'offer';
+    if (st === 'active') return this.questComplete(id) ? 'ready' : 'active';
+    if (st === 'claimed' && QUESTS[id].reward.perk === 'zinaFood' && Date.now() >= gameState.data.zinaFoodAt && gameState.data.food < gameState.foodMax)
+      return 'gift';
+    return 'none';
+  }
+
+  private questComplete(id: string): boolean {
+    const need = QUESTS[id].need;
+    const prog = gameState.data.questProgress[id] ?? 0;
+    return 'feed' in need ? prog >= need.feed : prog >= 1;
+  }
+
+  private autoRefill(): void {
+    const nearVan = this.near(this.van.x, this.van.y, VAN_RANGE);
+    if (nearVan && !this.nearVanBefore && gameState.refillFood()) {
+      play('pop');
+      this.toast('Корм пополнен', 'food');
+      this.floatText(this.van.x, this.van.y - 34, `${gameState.data.food}/${gameState.foodMax}`, '#f6d9ad');
+    }
+    this.nearVanBefore = nearVan;
+  }
+
+  private checkWave(): void {
+    const id = this.def.dogs!.districtId;
+    const at = gameState.data.nextWaveAt[id] ?? 0;
+    if (this.wildDogs.length === 0 && !this.player.carrying && at === 0) {
+      gameState.data.nextWaveAt[id] = Date.now() + WAVE_DELAY;
+      gameState.addCoins(50);
+      this.game.events.emit('district-complete', { name: this.def.name, bonus: 50 });
+    } else if (at > 0 && Date.now() >= at) {
+      gameState.startNextWave(id);
+      this.spawnDogs();
+      this.dogs.forEach((d) => d.dog.state === 'wild' && d.jump(6));
+      this.spawnPickups();
+      this.toast(`В ${this.def.name} прибежали новые собаки!`, 'paw');
+      play('bark', 1.2);
+    }
+  }
+
+  // ---------------------------------------------------------------- context
+
+  private nearestDog(maxDist: number, filter: (d: DogActor) => boolean): DogActor | null {
     let best: DogActor | null = null;
     let bestD = maxDist;
     for (const d of this.dogs) {
@@ -169,149 +244,233 @@ export class DistrictScene extends Phaser.Scene {
     return best;
   }
 
-  private updateContext(): void {
+  protected buildContext(): ContextInfo {
     const p = this.player;
     const food = gameState.data.food;
-    const nearVan = Phaser.Math.Distance.Between(p.x, p.y, this.van.x, this.van.y) < VAN_RANGE;
-    let kind: ActionKind = 'none';
+    const nearVan = this.near(this.van.x, this.van.y, VAN_RANGE);
+    let primary: ActionSpec | null = null;
     let target: DogActor | null = null;
-    let hint = 'Ищи собак: они прячутся у гаражей, теплотрассы и контейнеров';
+    let npc: Npc | null = null;
+    let hint = 'Ищи собак: у гаражей, теплотрассы и контейнеров';
+    const vanCount = gameState.data.van.length;
 
     if (p.carrying) {
-      kind = nearVan ? 'deposit' : 'carrying';
-      hint = nearVan ? 'Посади собаку в фургон' : 'Отнеси переноску к фургону';
+      if (nearVan && !gameState.vanFull) {
+        primary = A.deposit;
+        hint = 'Посади собаку в фургон';
+      } else hint = gameState.vanFull ? 'Фургон полон — сначала отвези собак в приют' : 'Отнеси переноску к фургону';
     } else {
       const catchable = this.nearestDog(CATCH_RANGE, (d) => d.isCatchable);
-      const seen = this.nearestDog(THROW_RANGE);
+      const talk = this.npcs.find((n) => this.near(n.x, n.y, TALK_RANGE) && ['offer', 'ready', 'gift', 'active'].includes(this.questStatus(n)));
+      const friend = this.nearestDog(24, (d) => d.dog.state === 'released');
+      const seen = this.nearestDog(THROW_RANGE, (d) => d.dog.state === 'wild');
       if (catchable) {
-        kind = 'catch';
+        if (gameState.vanFull) hint = 'Фургон полон — отвези собак в приют';
+        else {
+          primary = A.catch;
+          target = catchable;
+          hint = `${catchable.dog.name} ${g(catchable.dog, 'доволен', 'довольна')} — лови!`;
+        }
         target = catchable;
-        hint = `${catchable.dog.name} ${g(catchable.dog, 'доволен', 'довольна')} — лови!`;
-      } else if (nearVan && food < gameState.data.foodMax) {
-        kind = 'refill';
-        hint = 'Пополни запас корма у фургона';
+      } else if (talk) {
+        primary = A.talk;
+        npc = talk;
+        hint = talk.def.name;
+      } else if (friend) {
+        primary = A.pet;
+        target = friend;
+        hint = `${friend.dog.name} с биркой — ${g(friend.dog, 'свой', 'своя')}, ${g(friend.dog, 'домашний', 'домашняя')}`;
       } else if (seen) {
         target = seen;
         const name = seen.dog.name;
         const s = seen.dog.stats;
         if (seen.mode === 'eat' || seen.mode === 'toFood') {
-          kind = food > 0 ? 'feed' : 'none';
+          primary = food > 0 ? A.feed : null;
           hint = `${name} ест — подойди тихонько и лови!`;
         } else if (food <= 0) {
-          kind = 'nofood';
-          hint = 'Корм кончился — вернись к фургону';
+          hint = 'Корм кончился — он есть у фургона и у бабушки Зины';
         } else {
-          kind = 'feed';
+          primary = A.feed;
           if (isAggressive(s)) hint = `${name} злится. Кинь корм — подобреет`;
           else if (isTrusting(s)) hint = `${name} тебе доверяет — подойди ближе`;
           else hint = `${name} боится. Кинь корм и не спугни`;
         }
       } else if (food <= 0) {
-        kind = 'nofood';
-        hint = 'Корм кончился — вернись к фургону';
-      }
+        hint = 'Корм кончился — он есть у фургона и у бабушки Зины';
+      } else if (gameState.vanFull) hint = 'Фургон полон — отвези собак в приют';
+      else if (this.wildDogs.length === 0) hint = 'Все бездомные собаки района пойманы!';
     }
 
-    // arrow to the van when it matters and the van is off-screen
-    let vanArrow: ContextInfo['vanArrow'] = null;
-    if (p.carrying || food <= 0) {
-      const view = this.cameras.main.worldView;
-      if (!view.contains(this.van.x, this.van.y - 12)) {
-        const dx = this.van.x - p.x;
-        const dy = this.van.y - 12 - p.y;
-        const l = Math.hypot(dx, dy) || 1;
-        vanArrow = { x: dx / l, y: dy / l };
-      }
-    }
+    const secondary: ActionSpec | null =
+      nearVan && !p.carrying ? { id: 'travel', label: vanCount ? `В приют (${vanCount})` : 'В приют', icon: 'house', tone: 'blue' } : null;
+    if (nearVan && !p.carrying && vanCount > 0 && !primary) hint = `В фургоне ${vanCount} из ${gameState.vanCapacity}. Можно ехать в приют`;
+
+    let arrow: ContextInfo['arrow'] = null;
+    if (p.carrying || food <= 0 || gameState.vanFull) arrow = this.arrowTo(this.van.x, this.van.y - 12, 'van');
 
     this.ctxTarget = target;
-    const card = target ?? null;
-    const info: ContextInfo = {
-      kind,
+    this.ctxNpc = npc;
+    const at = gameState.data.nextWaveAt[this.def.dogs!.districtId] ?? 0;
+    const left = Math.max(0, Math.ceil((at - Date.now()) / 1000));
+    const progress = at > 0 ? { icon: 'paw', text: `Новые ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}` } : { icon: 'paw', text: `Дикие: ${this.wildDogs.length}` };
+    return {
+      location: 'garages',
+      primary,
+      secondary,
       hint,
-      dog: card?.dog ?? p.carrying ?? null,
-      dogMode: card?.mode ?? (p.carrying ? 'carried' : null),
-      vanArrow,
-      caught: this.totalDogs - this.dogs.length - (p.carrying ? 1 : 0),
-      total: this.totalDogs,
+      dog: target?.dog ?? p.carrying ?? null,
+      dogMode: target?.mode ?? (p.carrying ? 'carried' : null),
+      arrow,
+      progress,
     };
-    const key = [
-      kind,
-      hint,
-      info.dog?.id,
-      info.dogMode,
-      vanArrow ? `${vanArrow.x.toFixed(1)},${vanArrow.y.toFixed(1)}` : '',
-      info.caught,
-      card ? `${Math.round(card.dog.stats.aggression)}:${Math.round(card.dog.stats.trust)}` : '',
-    ].join('|');
-    if (key !== this.lastCtxKey) {
-      this.lastCtxKey = key;
-      this.ctxInfo = info;
-      this.game.events.emit('context', info);
-    }
-  }
-
-  /** Lets the UI ask for the latest context after it (re)starts. */
-  get context(): ContextInfo | null {
-    return this.ctxInfo;
   }
 
   // ---------------------------------------------------------------- actions
 
-  private onAction(): void {
-    if (this.catching || !this.ctxInfo) return;
-    switch (this.ctxInfo.kind) {
+  protected onAction(id: string): void {
+    if (this.catching || this.leaving) return;
+    switch (id) {
       case 'feed':
         if (this.ctxTarget) this.throwFood(this.ctxTarget);
         break;
       case 'catch':
-        if (this.ctxTarget) this.startCatch(this.ctxTarget);
+        if (this.ctxTarget?.isCatchable) this.startCatch(this.ctxTarget);
         break;
       case 'deposit':
         this.deposit();
         break;
-      case 'refill':
-        gameState.refillFood();
-        play('pop');
-        this.toast('Корм пополнен', 'food');
+      case 'talk':
+        if (this.ctxNpc) this.talk(this.ctxNpc);
+        break;
+      case 'pet':
+        if (this.ctxTarget) {
+          this.ctxTarget.pet();
+          this.burst(this.ctxTarget.x, this.ctxTarget.y - 14, 'icon_heart', 3);
+        }
+        break;
+      case 'travel':
+        if (!this.player.carrying) this.travel('Shelter');
         break;
     }
   }
 
+  private talk(n: Npc): void {
+    const id = n.def.quest!;
+    const q = QUESTS[id];
+    const st = this.questStatus(n);
+    play('talk');
+    if (st === 'offer') {
+      gameState.setQuest(id, 'active');
+      gameState.data.questProgress[id] = 0;
+      gameState.commit();
+      n.say(q.intro, 6000);
+      this.toast(`Задание: ${q.giver}`, 'star');
+      this.spawnPickups();
+    } else if (st === 'ready') {
+      gameState.setQuest(id, 'claimed');
+      gameState.addCoins(q.reward.coins);
+      n.say(q.thanks, 5000);
+      this.floatText(n.x, n.y - 30, `+${q.reward.coins}`);
+      this.burst(n.x, n.y - 20, 'icon_coin', 5);
+      play('coin');
+      if (q.reward.perk === 'zinaFood') gameState.data.zinaFoodAt = 0;
+    } else if (st === 'gift') {
+      gameState.refillFood();
+      gameState.data.zinaFoodAt = Date.now() + ZINA_FOOD_COOLDOWN;
+      gameState.save();
+      n.say('Держи, милок, корма для собачек!');
+      this.floatText(n.x, n.y - 30, 'корм!', '#f6d9ad');
+      play('pop');
+    } else if (st === 'active') {
+      const need = q.need;
+      const prog = gameState.data.questProgress[id] ?? 0;
+      n.say('feed' in need ? `${q.reminder} (${prog}/${need.feed})` : q.reminder);
+    }
+  }
+
   private throwFood(dog: DogActor): void {
-    if (this.time.now - this.lastThrow < 500) return;
+    if (this.time.now - this.lastThrow < 450) return;
     if (!gameState.useFood()) return;
     this.lastThrow = this.time.now;
     const p = this.player;
-    // land a bit in front of the dog, on the player's side so it doesn't run off
-    const a = Math.atan2(p.y - dog.y, p.x - dog.x);
-    const lx = Phaser.Math.Clamp(dog.x + Math.cos(a) * 16, 8, this.physics.world.bounds.width - 8);
-    const ly = Phaser.Math.Clamp(dog.y + Math.sin(a) * 10, 8, this.physics.world.bounds.height - 8);
+    p.throwPose();
+    if (Math.abs(dog.x - p.x) > Math.abs(dog.y - p.y)) {
+      p.facing = 'side';
+      p.facingLeft = dog.x < p.x;
+    } else p.facing = dog.y < p.y ? 'up' : 'down';
+    const { x: lx, y: ly } = this.landingSpot(dog);
     const sx = p.x;
-    const sy = p.y - 12;
+    const sy = p.y - 14;
     const kib = this.add.image(sx, sy, 'fx_kibble').setDepth(100000);
+    const shadow = this.add.image(sx, p.y, 'shadow_s').setScale(0.4).setDepth(p.y);
     play('throw');
     this.tweens.addCounter({
       from: 0,
       to: 1,
-      duration: 380,
+      duration: 420,
+      ease: 'Sine.InOut',
       onUpdate: (tw) => {
         const t = tw.getValue() ?? 0;
-        kib.setPosition(sx + (lx - sx) * t, sy + (ly - sy) * t - Math.sin(Math.PI * t) * 24);
+        kib.setPosition(sx + (lx - sx) * t, sy + (ly - sy) * t - Math.sin(Math.PI * t) * 26);
         kib.setAngle(t * 540);
+        shadow.setPosition(sx + (lx - sx) * t, p.y + (ly - p.y) * t);
       },
       onComplete: () => {
         kib.destroy();
-        this.foods.push(new FoodPile(this, lx, ly));
+        shadow.destroy();
+        const pile = new FoodPile(this, lx, ly);
+        pile.sprite.setScale(1.4, 0.6);
+        this.tweens.add({ targets: pile.sprite, scaleX: 1, scaleY: 1, duration: 260, ease: 'Back.Out' });
+        this.foods.push(pile);
         play('pop');
       },
     });
   }
 
+  private blocked(x: number, y: number): boolean {
+    const b = this.physics.world.bounds;
+    if (x < 6 || y < 6 || x > b.width - 6 || y > b.height - 6) return true;
+    return this.walls.some((z) => Math.abs(z.x - x) < z.width / 2 + 5 && Math.abs(z.y - y) < z.height / 2 + 4);
+  }
+
+  private clearPath(ax: number, ay: number, bx: number, by: number): boolean {
+    for (let i = 1; i <= 8; i++) {
+      const t = i / 8;
+      if (this.blocked(ax + (bx - ax) * t, ay + (by - ay) * t)) return false;
+    }
+    return true;
+  }
+
+  /**
+   * Where thrown food lands: in front of the dog, preferably on the player's side,
+   * but never inside or behind an obstacle — the dog must be able to walk straight to it.
+   */
+  private landingSpot(dog: DogActor): { x: number; y: number } {
+    const p = this.player;
+    const toPlayer = Math.atan2(p.y - dog.y, p.x - dog.x);
+    let best: { x: number; y: number } | null = null;
+    let bestScore = Infinity;
+    for (let i = 0; i < 16; i++) {
+      const a = toPlayer + (i % 2 ? 1 : -1) * Math.ceil(i / 2) * (Math.PI / 8);
+      for (const r of [16, 11]) {
+        const x = dog.x + Math.cos(a) * r;
+        const y = dog.y + Math.sin(a) * r * 0.7;
+        if (this.blocked(x, y) || !this.clearPath(dog.x, dog.y, x, y)) continue;
+        const score = Phaser.Math.Distance.Between(x, y, p.x, p.y);
+        if (score < bestScore) {
+          bestScore = score;
+          best = { x, y };
+        }
+      }
+      if (best && i >= 4) break;
+    }
+    return best ?? { x: dog.x, y: dog.y + 3 };
+  }
+
   private startCatch(dog: DogActor): void {
     this.catching = dog;
-    dog.setVelocity(0, 0);
-    this.player.setVelocity(0, 0);
+    dog.body.velocity.set(0, 0);
+    this.player.body.velocity.set(0, 0);
     const req: CatchRequest = { dog: dog.dog, difficulty: catchDifficulty(dog.dog.stats) };
     this.game.events.emit('catch-start', req);
     this.scene.pause();
@@ -327,24 +486,20 @@ export class DistrictScene extends Phaser.Scene {
       vibrate(40);
       this.dogs = this.dogs.filter((d) => d !== dog);
       this.burst(dog.x, dog.y - 10, 'icon_heart', 6);
-      const ghost = this.add.image(dog.x, dog.y, dog.texture.key, 0).setOrigin(0.5, 22 / 24).setDepth(dog.depth).setFlipX(dog.flipX);
+      const ghost = this.add
+        .sprite(dog.x, dog.y, dog.view.texture.key, dog.view.frame.name)
+        .setOrigin(0.5, 22 / 24)
+        .setDepth(dog.y)
+        .setFlipX(dog.facingLeft);
       dog.destroy();
-      this.tweens.add({
-        targets: ghost,
-        x: this.player.x,
-        y: this.player.y - 18,
-        scale: 0.3,
-        duration: 280,
-        ease: 'Quad.In',
-        onComplete: () => ghost.destroy(),
-      });
+      this.tweens.add({ targets: ghost, x: this.player.x, y: this.player.y - 20, scale: 0.3, duration: 300, ease: 'Cubic.In', onComplete: () => ghost.destroy() });
       this.player.pickUp(dog.dog);
       this.toast(`${dog.dog.name} в переноске!`, 'heart');
     } else {
       play('fail');
       applyCatchFail(dog.dog);
       dog.startle(this.player.x, this.player.y);
-      this.toast(`${dog.dog.name} ${g(dog.dog, 'вырвался', 'вырвалась')}…`, 'sweat');
+      this.toast(`${dog.dog.name} ${g(dog.dog, 'вырвался', 'вырвалась')}… Покорми ещё и попробуй снова`, 'sweat');
     }
   }
 
@@ -353,21 +508,13 @@ export class DistrictScene extends Phaser.Scene {
     if (!dog) return;
     play('van');
     const reward = catchReward(dog.stats, dog.isLeader);
-    gameState.markCaught(dog.id);
+    gameState.putInVan(dog);
     gameState.addCoins(reward);
     this.time.delayedCall(250, () => play('coin'));
-    this.tweens.add({ targets: this.van, scaleY: 0.94, scaleX: 1.03, yoyo: true, duration: 110, repeat: 1 });
+    this.tweens.add({ targets: this.van, scaleY: 0.93, scaleX: 1.04, yoyo: true, duration: 120, repeat: 1, ease: 'Sine.InOut' });
     this.burst(this.van.x, this.van.y - 30, 'icon_coin', 5);
-    this.toast(`${dog.name} в фургоне! +${reward}`, 'coin');
-    if (this.dogs.length === 0) {
-      gameState.addCoins(50);
-      this.time.delayedCall(700, () => this.game.events.emit('district-complete', { name: this.def.name, bonus: 50 }));
-    }
-  }
-
-  private restartDistrict(): void {
-    gameState.resetDistrict(this.def.id);
-    this.scene.restart();
+    this.floatText(this.van.x, this.van.y - 36, `+${reward}`);
+    this.toast(`${dog.name} в фургоне! ${gameState.data.van.length}/${gameState.vanCapacity}`, 'van');
   }
 
   // ---------------------------------------------------------------- dog events
@@ -377,7 +524,7 @@ export class DistrictScene extends Phaser.Scene {
     play('bite');
     vibrate([30, 40, 30]);
     p.stun(650, dog.x, dog.y);
-    this.cameras.main.shake(160, 0.004);
+    this.cameras.main.shake(160, 0.003);
     if (!p.carrying && gameState.useFood()) {
       // the dog snatches a portion — and that actually helps: it will eat and calm down
       this.foods.push(new FoodPile(this, p.x + (dog.x < p.x ? -6 : 6), p.y + 2));
@@ -389,28 +536,9 @@ export class DistrictScene extends Phaser.Scene {
 
   private onFed(dog: DogActor): void {
     this.burst(dog.x, dog.y - 14, 'icon_heart', 3);
+    gameState.data.fedCount++;
+    if (gameState.quest('zina') === 'active') gameState.data.questProgress.zina = (gameState.data.questProgress.zina ?? 0) + 1;
+    gameState.save();
     if (isTrusting(dog.dog.stats)) this.toast(`${dog.dog.name} ${g(dog.dog, 'подобрел', 'подобрела')}!`, 'heart');
-  }
-
-  // ---------------------------------------------------------------- fx
-
-  private burst(x: number, y: number, tex: string, n: number): void {
-    for (let i = 0; i < n; i++) {
-      const img = this.add.image(x, y, tex).setDepth(200000).setScale(0.6);
-      this.tweens.add({
-        targets: img,
-        x: x + Phaser.Math.Between(-16, 16),
-        y: y - Phaser.Math.Between(10, 26),
-        alpha: 0,
-        scale: 1,
-        duration: 700 + i * 60,
-        ease: 'Quad.Out',
-        onComplete: () => img.destroy(),
-      });
-    }
-  }
-
-  private toast(text: string, icon?: string): void {
-    this.game.events.emit('toast', { text, icon });
   }
 }

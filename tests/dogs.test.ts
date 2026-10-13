@@ -4,7 +4,7 @@ import { generateDistrictDogs } from '../src/dogs/generator';
 import { garagesDistrict } from '../src/data/garages';
 import type { DogData } from '../src/dogs/types';
 
-const cfg = garagesDistrict().dogs;
+const cfg = garagesDistrict().dogs!;
 
 function dog(over: Partial<DogData['stats']> = {}, traits: DogData['traits'] = []): DogData {
   const d = generateDistrictDogs(cfg, 1)[1];
@@ -77,5 +77,39 @@ describe('dog behaviour', () => {
     expect(catchReward({ hunger: 0, dirt: 0, health: 100, aggression: 80, trust: 0 }, false)).toBeGreaterThan(
       catchReward({ hunger: 0, dirt: 0, health: 100, aggression: 10, trust: 60 }, false),
     );
+  });
+});
+
+describe('regression: a fed dog that escaped can still be lured', () => {
+  it('wants food even when not hungry', async () => {
+    const { wantsFood } = await import('../src/dogs/behaviour');
+    const d = dog({ hunger: 0, aggression: 30, trust: 30 });
+    expect(wantsFood(d.stats)).toBe(true);
+  });
+
+  it('a shy dog lets you closer as trust grows', () => {
+    const scared = dog({ aggression: 30, trust: 0 });
+    const warmer = dog({ aggression: 30, trust: 45 });
+    expect(reactToPlayer(scared, 40)).toBe('flee');
+    expect(reactToPlayer(warmer, 40)).toBeNull();
+  });
+});
+
+describe('shelter care', () => {
+  it('tag needs wash, feed and vet first; the full cycle makes the dog tagged', async () => {
+    const { applyCare, careBlocker, careProgress } = await import('../src/dogs/behaviour');
+    const d = dog({ dirt: 80, hunger: 70 });
+    expect(careBlocker(d, 'tag')).not.toBeNull();
+    for (const step of ['wash', 'feed', 'vet'] as const) {
+      expect(careBlocker(d, step)).toBeNull();
+      applyCare(d, step);
+      expect(careBlocker(d, step)).toBe('уже сделано');
+    }
+    expect(careBlocker(d, 'tag')).toBeNull();
+    applyCare(d, 'tag');
+    expect(d.state).toBe('tagged');
+    expect(d.tagId).toBeTruthy();
+    expect(careProgress(d)).toBe(4);
+    expect(isAggressive(d.stats)).toBe(false);
   });
 });

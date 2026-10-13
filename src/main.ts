@@ -3,6 +3,7 @@ import Phaser from 'phaser';
 import { gameState } from './core/state';
 import { BootScene } from './scenes/BootScene';
 import { DistrictScene } from './scenes/DistrictScene';
+import { ShelterScene } from './scenes/ShelterScene';
 import { UIScene } from './scenes/UIScene';
 import { getDpr, updateMetrics } from './ui/metrics';
 
@@ -19,7 +20,8 @@ const game = new Phaser.Game({
   parent,
   backgroundColor: '#2b2433',
   pixelArt: true,
-  roundPixels: true,
+  // no pixel snapping: sprites glide smoothly between pixels at high zoom
+  roundPixels: false,
   scale: {
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH,
@@ -31,7 +33,7 @@ const game = new Phaser.Game({
     arcade: { debug: false },
   },
   input: { activePointers: 3 },
-  scene: [BootScene, DistrictScene, UIScene],
+  scene: [BootScene, DistrictScene, ShelterScene, UIScene],
 });
 
 let resizeTimer = 0;
@@ -52,3 +54,4 @@ document.addEventListener('visibilitychange', () => {
 
 // handy for debugging from the console
 (window as unknown as { game: Phaser.Game }).game = game;
+if (import.meta.env.DEV) (window as unknown as { gameState: typeof gameState }).gameState = gameState;

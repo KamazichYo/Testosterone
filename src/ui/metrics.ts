@@ -7,7 +7,8 @@ export const metrics = {
 };
 
 export function getDpr(): number {
-  return Math.min(window.devicePixelRatio || 1, 3);
+  // capped at 2: pixel art looks the same, and phones render ~2x fewer pixels → smoother frame rate
+  return Math.min(window.devicePixelRatio || 1, 2);
 }
 
 export function updateMetrics(): void {

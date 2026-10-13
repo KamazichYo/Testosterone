@@ -8,7 +8,7 @@ export const TILE = 16;
 export type GroundType = 'g' | 'd' | 'a' | 's';
 
 export interface Decal {
-  kind: 'puddle' | 'oil' | 'manhole' | 'leaves' | 'hopscotch' | 'flowers';
+  kind: 'puddle' | 'oil' | 'manhole' | 'leaves' | 'hopscotch' | 'flowers' | 'dashes' | 'zebra' | 'parking' | 'patch' | 'grate';
   x: number;
   y: number;
   w?: number;
@@ -220,6 +220,41 @@ function drawDecal(pc: PixelCanvas, d: Decal, seed: number): void {
         pc.set(lx, ly + 1, GRASS_DARK);
         pc.set(lx, ly, c);
       }
+      break;
+    }
+    case 'dashes': {
+      const paint = hex('#e9e4d6');
+      for (let x = d.x + 4; x < d.x + w - 8; x += 16) {
+        pc.rect(x, d.y, 9, 2, paint);
+        pc.set(x + 3 + (Math.floor(x) % 5), d.y, hex('#c9c4b6'));
+      }
+      break;
+    }
+    case 'zebra': {
+      const paint = hex('#ece7da');
+      for (let x = d.x + 2; x < d.x + w - 2; x += 8) {
+        for (let y = d.y + 3; y < d.y + h - 3; y++) {
+          for (let i = 0; i < 5; i++) if (hash2(x + i, y, seed) > 0.08) pc.set(x + i, y, paint);
+        }
+      }
+      break;
+    }
+    case 'parking': {
+      const paint = hex('#e3dfd2');
+      for (let x = d.x + 8; x <= d.x + w - 8; x += 26) pc.vline(x, d.y + 4, d.y + 22, paint);
+      for (let x = d.x + 8; x <= d.x + w - 8; x += 26) pc.vline(x, d.y + h - 22, d.y + h - 4, paint);
+      break;
+    }
+    case 'patch': {
+      const c = hex('#5a5660');
+      pc.rect(Math.round(d.x - w / 2), Math.round(d.y - h / 2), w, h, c);
+      pc.hline(Math.round(d.x - w / 2), Math.round(d.x + w / 2) - 1, Math.round(d.y - h / 2), shade(c, 1.15));
+      for (let i = 0; i < w; i += 3) pc.set(Math.round(d.x - w / 2) + i, Math.round(d.y), shade(c, 1.12));
+      break;
+    }
+    case 'grate': {
+      pc.rect(Math.round(d.x - 6), Math.round(d.y - 3), 12, 6, hex('#3f3b44'));
+      for (let x = -5; x < 6; x += 2) pc.vline(Math.round(d.x + x), Math.round(d.y - 2), Math.round(d.y + 1), hex('#6a666f'));
       break;
     }
     case 'hopscotch': {

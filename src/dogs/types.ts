@@ -5,7 +5,15 @@ export type Pattern = 'none' | 'spots' | 'saddle' | 'socks' | 'mask';
 export type DogSize = 'small' | 'medium' | 'large';
 export type Trait = 'glutton' | 'coward' | 'cuddly' | 'grumbler' | 'sleepy' | 'fidget';
 export type Sex = 'm' | 'f';
-export type DogState = 'wild' | 'caught' | 'in_care' | 'tagged' | 'adopted';
+/**
+ * wild     — lives on the street, not caught yet
+ * caught   — in the carrier or the van
+ * in_care  — at the shelter, going through the stations
+ * tagged   — full care cycle done (washed, fed, vet, ear tag), waits in a kennel
+ * released — tagged and returned to its district: calm and friendly
+ * adopted  — went home with a family
+ */
+export type DogState = 'wild' | 'caught' | 'in_care' | 'tagged' | 'released' | 'adopted';
 
 export interface DogLook {
   size: DogSize;
@@ -56,11 +64,16 @@ export const TRAIT_LABEL: Record<Trait, string> = {
   fidget: 'Непоседа',
 };
 
-export const TEMPERAMENT_LABEL: Record<Temperament, string> = {
-  friendly: 'Дружелюбная',
-  shy: 'Пугливая',
-  grumpy: 'Злая',
+export const TEMPERAMENT_LABEL: Record<Temperament, [string, string]> = {
+  friendly: ['Дружелюбный', 'Дружелюбная'],
+  shy: ['Пугливый', 'Пугливая'],
+  grumpy: ['Злой', 'Злая'],
 };
+
+export function temperamentLabel(dog: { temperament: Temperament; sex: Sex }): string {
+  const [m, f] = TEMPERAMENT_LABEL[dog.temperament];
+  return dog.sex === 'f' ? f : m;
+}
 
 /** Pick the word form that agrees with the dog's sex: g(dog, 'подобрел', 'подобрела'). */
 export function g(dog: { sex: Sex }, male: string, female: string): string {

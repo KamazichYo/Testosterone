@@ -61,6 +61,26 @@ const ICONS: Record<string, { rows: string[]; pal: Record<string, Color> }> = {
     rows: ['...O....', '..OwO...', 'OOwwOO.O', 'OwwwO.O.', 'OOwwOO.O', '..OwO...', '...O....'],
     pal: { O, w: hex('#f1ead8') },
   },
+  check: {
+    rows: ['.....OO', '....OgO', 'OO.OgO.', 'OgOgO..', '.OgO...', '..O....'],
+    pal: { O, g: hex('#7cc576') },
+  },
+  drop: {
+    rows: ['...O...', '..ObO..', '.ObbbO.', 'ObWbbbO', 'ObWbbbO', 'ObbbbbO', '.ObbbO.', '..OOO..'],
+    pal: { O, b: hex('#7fc4ff'), W: hex('#e6f6ff') },
+  },
+  cross: {
+    rows: ['..OOO..', '..OgO..', 'OOOgOOO', 'OgggggO', 'OOOgOOO', '..OgO..', '..OOO..'],
+    pal: { O, g: hex('#7cc576') },
+  },
+  house: {
+    rows: ['...OO...', '..OrrO..', '.OrrrrO.', 'OrrrrrrO', '.OwwwwO.', '.OwOOwO.', '.OwOOwO.', '.OOOOOO.'],
+    pal: { O, r: hex('#e0604a'), w: hex('#f4e4c1') },
+  },
+  talk: {
+    rows: ['.OOOOOO.', 'OwwwwwwO', 'OwOwOwwO', 'OwwwwwwO', '.OOwOOO.', '..OO....'],
+    pal: { O, w: hex('#fff6e0') },
+  },
   tag: {
     rows: ['.OOOO.', 'OyyWyO', 'OyyyyO', 'OyOOyO', 'OyyyyO', '.OOOO.'],
     pal: { O, y: hex('#ffd23f'), W: hex('#fff3b0') },

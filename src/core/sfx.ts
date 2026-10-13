@@ -50,7 +50,25 @@ function noise(dur: number, vol: number, freq: number, delay = 0): void {
   src.start(t0);
 }
 
-export type Sfx = 'bark' | 'growl' | 'coin' | 'throw' | 'catch' | 'fail' | 'pop' | 'tick' | 'bite' | 'happy' | 'van';
+export type Sfx =
+  | 'bark'
+  | 'growl'
+  | 'coin'
+  | 'throw'
+  | 'catch'
+  | 'fail'
+  | 'pop'
+  | 'tick'
+  | 'bite'
+  | 'happy'
+  | 'van'
+  | 'flutter'
+  | 'hiss'
+  | 'splash'
+  | 'ding'
+  | 'scrub'
+  | 'talk'
+  | 'buy';
 
 export function play(s: Sfx, pitch = 1): void {
   switch (s) {
@@ -92,6 +110,28 @@ export function play(s: Sfx, pitch = 1): void {
     case 'van':
       tone(200, 0.12, 'square', 0.05);
       tone(200, 0.12, 'square', 0.05, undefined, 0.18);
+      break;
+    case 'flutter':
+      for (let i = 0; i < 4; i++) noise(0.04, 0.08, 1800, i * 0.05);
+      break;
+    case 'hiss':
+      noise(0.35, 0.06, 3500);
+      break;
+    case 'splash':
+      noise(0.09, 0.07, 1200);
+      break;
+    case 'ding':
+      tone(1568, 0.25, 'sine', 0.06);
+      tone(2093, 0.3, 'sine', 0.04, undefined, 0.08);
+      break;
+    case 'scrub':
+      noise(0.12, 0.05, 2500);
+      break;
+    case 'talk':
+      [0, 1, 2].forEach((i) => tone(380 + Math.random() * 160, 0.05, 'triangle', 0.04, undefined, i * 0.07));
+      break;
+    case 'buy':
+      [784, 988, 1175, 1568].forEach((f, i) => tone(f, 0.1, 'square', 0.04, undefined, i * 0.06));
       break;
   }
 }
